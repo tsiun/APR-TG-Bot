@@ -1,1 +1,1 @@
-worker: python APRbot.py
+start: python APRbot.py
