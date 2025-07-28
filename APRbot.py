@@ -1,6 +1,7 @@
 import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+bot_token = os.getenv("BOT_TOKEN")
 
 def calculate_apr(profit, principal, days):
     daily_rate = profit / principal
