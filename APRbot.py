@@ -1,33 +1,38 @@
 import os
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+import threading
 import logging
+from flask import Flask
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+)
+
+# 🔧 Логгирование
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.info("Bot is running...")
 
-# 📊 Формулы расчёта:
+# 🔐 Переменные окружения
+TOKEN = os.environ.get("BOT_TOKEN")
+PORT = int(os.environ.get("PORT", 10000))  # Render задаёт порт
+
+# 📊 Формулы расчёта
 def calculate_apr(profit, principal, days):
-    daily_rate = profit / principal
-    apr = daily_rate * (365 / days) * 100
-    return apr
+    return (profit / principal) * (365 / days) * 100
 
 def calculate_apy(profit, principal, days):
     period_rate = profit / principal
-    periods_per_year = 365 / days
-    apy = ((1 + period_rate) ** periods_per_year - 1) * 100
-    return apy
+    return ((1 + period_rate) ** (365 / days) - 1) * 100
 
 def calculate_roi(profit, principal):
     return (profit / principal) * 100
 
-# 🟢 /start команда:
+# 🟢 /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Send me 3 numbers: principal, profit, and days. Example:\n\n50000 108.47 15"
     )
 
-# 📥 Обработка пользовательского ввода:
+# 📥 Обработка ввода
 async def calculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
@@ -49,18 +54,27 @@ async def calculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📈 ROI: {roi:.2f}%\n📉 APR: {apr:.2f}%\n🌱 APY: {apy:.2f}%"
         )
 
-    except Exception as e:
+    except Exception:
         await update.message.reply_text("⚠️ Please send 3 values like:\n50000 108.47 15")
 
-# 🚀 Основной запуск:
+# 🌐 Flask для Render Web Service
+web_app = Flask(__name__)
+
+@web_app.route("/")
+def index():
+    return "Bot is running!"
+
+def run_flask():
+    web_app.run(host="0.0.0.0", port=PORT)
+
+# 🚀 Запуск Telegram-бота и Flask
 if __name__ == "__main__":
-    # ✅ ИСПРАВЛЕНО: имя переменной окружения
-    TOKEN = os.environ.get("BOT_TOKEN")  # ← так ты должен был указать в Render
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, calculate))
 
-    app = ApplicationBuilder().token(TOKEN).build()
+    # Запуск Flask-сервера в отдельном потоке
+    threading.Thread(target=run_flask).start()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, calculate))
-
-    print("✅ Bot is running...")
-    app.run_polling()
+    # Запуск Telegram polling
+    application.run_polling()
